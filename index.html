@@ -245,7 +245,8 @@
       render()
     });
     const even=$('even'),hump=$('hump'),smooth=$('smooth'),rebalance=$('rebalance');
-    even.onclick=()=>{state.LaunchMix=Array(12).fill(1/12);syncMixUI();render()};
+    even.onclick=()=>{state.LaunchMix=Array(12).fill(1/12);syncMixUI();
+    const applyDefaultPreset=()=>{[...presets.children].forEach(c=>{if(c.dataset.name==='Typical')c.classList.add('active')});applyInputs();render()};render()};
     hump.onclick=()=>{state.LaunchMix=[.25,.18,.12,.09,.07,.06,.06,.06,.04,.03,.02,.02];normalizeMix();syncMixUI();render()};
     smooth.onclick=()=>{let arr=[];let s=0;for(let i=1;i<=12;i++){arr.push(i);s+=i}state.LaunchMix=arr.map(v=>v/s);syncMixUI();render()};
     rebalance.onclick=()=>{normalizeMix();syncMixUI();render()};
@@ -343,21 +344,45 @@
     const render=()=>{
       const ss=steadyState(state);
       const rows=ramp(state);
-      let i=0;
-      const step=()=>{
-        if(i>=rows.length){return}
-        const partial = rows.slice(0,i+1);
-        while(partial.length<12){ partial.push({final:0}); }
-        drawHeat(partial);
-        i++;
-        requestAnimationFrame(step)
-      };
       drawHeat(rows);
-      requestAnimationFrame(step)
-      };
-      render();
-      requestAnimationFrame(step)
+      kFinal.textContent=ss.final;
+      const driver=ss.buf>=ss.cap?'Session volume':'Member capacity';
+      kBadge.textContent=driver;
+      kMPC.textContent=Math.max(1,Math.round(state.N/Math.max(1,ss.final)));
+      kSW.textContent=fmt(ss.sw);
+      buildMini();
+      fillTable(rows);
+      sensUpdate();
+      const totalMembersGeo=+gn.value+ +ge.value+ +ga.value;
+      const totalCoachesGeo=+cn.value+ +ce.value+ +ca.value;
+      const geoDiv=$('geoKpis'); geoDiv.innerHTML='';
+      const chip=(t)=>{const d=document.createElement('div');d.className='chip';d.textContent=t;return d};
+      const useSplit=(useGeo.value==='yes');
+      if(useSplit){ state.N=Math.max(1,totalMembersGeo); inputs.N.value=state.N; }
+      const shortfall= totalCoachesGeo - ss.final;
+      geoDiv.appendChild(chip('Total GEO members: '+fmt(totalMembersGeo)));
+      geoDiv.appendChild(chip('Available coaches: '+fmt(totalCoachesGeo)));
+      geoDiv.appendChild(chip((shortfall>=0?'Surplus: ':'Shortfall: ')+fmt(Math.abs(shortfall))));
+      const geoRows=[
+        {k:'NORAM',members:+gn.value,avail:+cn.value},
+        {k:'EMEA',members:+ge.value,avail:+ce.value},
+        {k:'APAC',members:+ga.value,avail:+ca.value}
+      ];
+      const totalM=geoRows.reduce((a,r)=>a+r.members,0)||1;
+      const gtb=$('geoTbl').querySelector('tbody'); gtb.innerHTML='';
+      let recos=[];
+      geoRows.forEach(r=>{
+        const share=r.members/totalM; const needed=Math.ceil(ss.final*share); const delta=needed-r.avail;
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${r.k}</td><td>${fmt(r.members)}</td><td>${(share*100).toFixed(1)}%</td><td>${fmt(r.avail)}</td><td>${fmt(needed)}</td><td>${delta>0?('+'+delta):delta}</td>`;
+        gtb.appendChild(tr);
+        if(delta>0){ recos.push(`${r.k}: add ${delta} coach${delta>1?'es':''}`); }
+      });
+      const earlyLoad= state.LaunchMix.slice(0,3).reduce((a,b)=>a+b,0);
+      const shiftReco = earlyLoad>0.5 ? ` Consider shifting ${Math.round((earlyLoad-0.5)*100)}% of launch volume from W1–W3 to W4–W6 or increase booking window to reduce weekly spikes.` : '';
+      $('recoText').textContent = (recos.length?('Recommendations — '+recos.join('; ')+'.'):'No changes suggested.') + shiftReco;
     };
+    $('play').onclick=()=>{ const rows=ramp(state); let i=0; const animate=()=>{ if(i>=rows.length){return} const partial=rows.slice(0,i+1); while(partial.length<12){ partial.push({final:0}); } drawHeat(partial); i++; requestAnimationFrame(animate); }; drawHeat(rows); requestAnimationFrame(animate); };
     $('png').onclick=()=>{
       const chartImg=heat.toDataURL('image/png');
       const c=document.createElement('canvas');
@@ -377,7 +402,7 @@
     $('csv').onclick=()=>{
       const rows=ramp(state);
       let csv='Week,Active members,Sessions/week,Base coaching need,Need incl. buffer,Cap-based,Final\n';
-      rows.forEach(r=>{csv+=`M${r.m},${Math.round(r.active)},${r.sw},${r.raw},${r.buf},${r.cap},${r.final}\n`});
+      rows.forEach(r=>{csv+=`W${r.m},${Math.round(r.active)},${r.sw},${r.raw},${r.buf},${r.cap},${r.final}\n`});
       const blob=new Blob([csv],{type:'text/csv'});
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');
