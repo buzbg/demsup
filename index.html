@@ -56,7 +56,7 @@
   <div class="wrap">
     <h1>Coach Supply Simulator</h1>
     <div class="topcopy">
-        Explore staffing needs over time. KPIs summarize the current scenario, the chart shows the monthly ramp, Inputs set the assumptions, Launch Mix controls staggered activation, Sensitivity gives quick what‑ifs, and GEOs & Coach Pools let you size by region and compare against available supply.
+        Explore staffing needs over time. KPIs summarize the current scenario, the visual shows the weekly ramp, Inputs set the assumptions, Launch Mix controls staggered activation, Sensitivity gives quick what‑ifs, and GEOs & Coach Pools let you size by region and compare against available supply.
       </div>
     <div class="layout">
       <div class="panel">
@@ -80,7 +80,7 @@
           </div>
         </div>
         <div class="panel" style="margin-top:10px">
-          <div class="chartWrap"><canvas id="mainChart"></canvas></div>
+          <div class="chartWrap"><canvas id="heat"></canvas></div>
           <div class="sub">
             <div class="row">
               <div class="pill">Active members</div>
@@ -109,7 +109,7 @@
           <div class="igroup"><label>Sessions/member/year (S)</label><input id="S" class="focus" type="number" min="1" max="52" step="1" value="4"></div>
           <div class="igroup"><label>Weeks per month (Wm)</label><input id="Wm" class="focus" type="number" min="1" max="5" step="0.01" value="4.33"></div>
           <div class="igroup"><label><span title="Weeks per month when sessions actually happen. Lower = more concentrated bookings → higher weekly demand.">Booking window (Bw)</span></label><input id="Bw" class="focus" type="number" min="2" max="13" step="1" value="3"></div>
-          <div class="igroup"><label><span title="Weekly 1:1 sessions a coach can run.">Coach sessions/week (Cw)</span></label><select id="Cw" class="focus"><option>10</option><option>12</option><option selected>15</option><option>20</option></select></div>
+          <div class="igroup"><label><span title="Weekly 1:1 sessions a coach can run.">Coach sessions per week</span></label><select id="Cw" class="focus"><option>10</option><option>12</option><option selected>15</option><option>20</option></select></div>
           <div class="igroup"><label><span title="Extra staffing to absorb PTO, cancellations, and scheduling friction.">Buffer % (Buf)</span></label><input id="Buf" class="focus" type="number" min="0" max="50" step="1" value="15"></div>
           <div class="igroup"><label><span title="Maximum active members a coach can hold.">Max members/coach (Cap)</span></label><input id="Cap" class="focus" type="number" min="1" step="1" value="100"></div>
         </div>
@@ -124,7 +124,7 @@
           <div class="row" style="justify-content:flex-end"><span id="sumWarn" class="warn hide">Fix to 1.00</span></div>
         </div>
         <h2 style="margin-top:12px">Sensitivity</h2>
-        <div class="help">Quick what‑ifs: shows the resulting Final coaches required if weekly capacity (Cw) were 10/12/15/20. Click a chip to apply that capacity.</div>
+        <div class="help">Quick what‑ifs: shows Final coaches required if coach capacity per week were 10, 12, 15, or 20 sessions. Click a chip to apply.</div>
         <div class="chips" id="sens"></div>
         <h2 style="margin-top:12px">Export & Share</h2>
         <div class="row">
@@ -164,7 +164,7 @@
         <table id="dataTbl">
           <thead>
             <tr>
-              <th>Month</th>
+              <th>Week<\/th>
               <th>Active members</th>
               <th>Sessions/week</th>
               <th>Base coaching need</th>
@@ -185,7 +185,7 @@
     const ceil=x=>Math.ceil(x-1e-9);
     const state={N:6000,S:4,Wm:4.33,Bw:3,Cw:15,Buf:15,Cap:100,LaunchMix:Array(12).fill(1/12)};
     const inputs={N:$('N'),S:$('S'),Wm:$('Wm'),Bw:$('Bw'),Cw:$('Cw'),Buf:$('Buf'),Cap:$('Cap')};
-    const months=['M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12'];
+    const months=['W1','W2','W3','W4','W5','W6','W7','W8','W9','W10','W11','W12'];
     const mixGrid=$('mixGrid');
     for(let i=0;i<12;i++){
       const w=document.createElement('div');
@@ -304,26 +304,24 @@
       }
       return rows
     };
-    const mainChart=new Chart($('mainChart').getContext('2d'),{
-      type:'line',
-      data:{labels:months,datasets:[
-        {label:'Active members',data:[],borderWidth:2,tension:.25,pointRadius:0},
-        {label:'Base coaching need',data:[],borderWidth:2,tension:.25,pointRadius:0,borderDash:[6,4]},
-        {label:'Need incl. buffer',data:[],borderWidth:2,tension:.25,pointRadius:0},
-        {label:'Final',type:'bar',data:[],backgroundColor:'#e9d8a6',borderWidth:0}
-      ]},
-      options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},plugins:{legend:{labels:{color:'#cfe2ff'}},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#9fb3c8'}},y:{ticks:{color:'#9fb3c8'},beginAtZero:true}}}
-    });
-    const palette=()=>{
-      const a='rgba(110,168,254,0.35)',b='rgba(148,210,189,0.35)',c='rgba(192,132,252,0.35)';
-      mainChart.data.datasets[0].borderColor='#6ea8fe';
-      mainChart.data.datasets[0].backgroundColor=a; mainChart.data.datasets[0].fill=true;
-      mainChart.data.datasets[1].borderColor='#94d2bd';
-      mainChart.data.datasets[1].backgroundColor=b; mainChart.data.datasets[1].fill=true;
-      mainChart.data.datasets[2].borderColor='#c084fc';
-      mainChart.data.datasets[2].backgroundColor=c; mainChart.data.datasets[2].fill=true;
+    const heat=$('heat');
+    const hctx=heat.getContext('2d');
+    const drawHeat=(rows)=>{
+      const w=heat.clientWidth||heat.width; const h=heat.clientHeight||heat.height; heat.width=w; heat.height=h;
+      const pad=24; const cols=rows.length; const cw=(w-pad*2)/cols; const ch=h-pad*2;
+      const totalCoachesGeo=+cn.value+ +ce.value+ +ca.value; const useSplit=(useGeo.value==='yes');
+      for(let i=0;i<cols;i++){
+        const need=rows[i]?.final||0; const avail= useSplit? totalCoachesGeo : Infinity; const gap = avail-need;
+        let color;
+        if(!isFinite(avail)) { color='rgba(233,216,166,0.8)'; }
+        else if(gap>=0){ const t=Math.min(1, gap/(need||1)); const g=Math.floor(120+100*t); color=`rgb(60, ${g}, 100)`; }
+        else{ const t=Math.min(1, (-gap)/(need||1)); const r=Math.floor(160+80*t); color=`rgb(${r}, 70, 70)`; }
+        hctx.fillStyle=color; hctx.fillRect(pad+i*cw, pad, cw-2, ch);
+      }
+      hctx.fillStyle='#9fb3c8'; hctx.font='12px Inter, sans-serif'; hctx.textAlign='center';
+      for(let i=0;i<cols;i++){ hctx.fillText(months[i], pad+i*cw+cw/2, h-pad/2); }
     };
-    palette();
+    
     const buildMini=()=>{
       mixMini.innerHTML='';
       state.LaunchMix.forEach(v=>{
@@ -338,86 +336,30 @@
       tb.innerHTML='';
       rows.forEach(r=>{
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>M${r.m}</td><td>${fmt(r.active)}</td><td>${fmt(r.sw)}</td><td>${fmt(r.raw)}</td><td>${fmt(r.buf)}</td><td>${fmt(r.cap)}</td><td>${fmt(r.final)}</td>`;
+        tr.innerHTML=`<td>W${r.m}</td><td>${fmt(r.active)}</td><td>${fmt(r.sw)}</td><td>${fmt(r.raw)}</td><td>${fmt(r.buf)}</td><td>${fmt(r.cap)}</td><td>${fmt(r.final)}</td>`;
         tb.appendChild(tr)
       })
     };
     const render=()=>{
       const ss=steadyState(state);
       const rows=ramp(state);
-      const act=rows.map(r=>r.active);
-      const raw=rows.map(r=>r.raw);
-      const buf=rows.map(r=>r.buf);
-      const fin=rows.map(r=>r.final);
-      mainChart.data.datasets[0].data=act;
-      mainChart.data.datasets[1].data=raw;
-      mainChart.data.datasets[2].data=buf;
-      mainChart.data.datasets[3].data=fin;
-      mainChart.update();
-      kFinal.textContent=ss.final;
-      const driver=ss.buf>=ss.cap?'Session volume':'Member capacity';
-      kBadge.textContent=driver;
-      kMPC.textContent=Math.max(1,Math.round(state.N/Math.max(1,ss.final)));
-      kSW.textContent=fmt(ss.sw);
-      buildMini();
-      fillTable(rows);
-      sensUpdate();
-      const totalMembersGeo=+gn.value+ +ge.value+ +ga.value;
-      const totalCoachesGeo=+cn.value+ +ce.value+ +ca.value;
-      const geoDiv=$('geoKpis');
-      geoDiv.innerHTML='';
-      const chip=(t)=>{const d=document.createElement('div');d.className='chip';d.textContent=t;return d};
-      const useSplit=(useGeo.value==='yes');
-      if(useSplit){
-        state.N=Math.max(1,totalMembersGeo);
-        inputs.N.value=state.N;
-      }
-      const shortfall= totalCoachesGeo - ss.final;
-      geoDiv.appendChild(chip('Total GEO members: '+fmt(totalMembersGeo)));
-      geoDiv.appendChild(chip('Available coaches: '+fmt(totalCoachesGeo)));
-      geoDiv.appendChild(chip((shortfall>=0?'Surplus: ':'Shortfall: ')+fmt(Math.abs(shortfall))));
-      const geoRows=[
-        {k:'NORAM',members:+gn.value,avail:+cn.value},
-        {k:'EMEA',members:+ge.value,avail:+ce.value},
-        {k:'APAC',members:+ga.value,avail:+ca.value}
-      ];
-      const totalM=geoRows.reduce((a,r)=>a+r.members,0)||1;
-      const gtb=$('geoTbl').querySelector('tbody');
-      gtb.innerHTML='';
-      let recos=[];
-      geoRows.forEach(r=>{
-        const share=r.members/totalM;
-        const needed=Math.ceil(ss.final*share);
-        const delta=needed - r.avail;
-        const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${r.k}</td><td>${fmt(r.members)}</td><td>${(share*100).toFixed(1)}%</td><td>${fmt(r.avail)}</td><td>${fmt(needed)}</td><td>${delta>0?('+'+delta):delta}</td>`;
-        gtb.appendChild(tr);
-        if(delta>0){ recos.push(`${r.k}: add ${delta} coach${delta>1?'es':''}`); }
-      });
-      const earlyLoad= state.LaunchMix.slice(0,3).reduce((a,b)=>a+b,0);
-      const shiftReco = earlyLoad>0.5 ? ` Consider shifting ${Math.round((earlyLoad-0.5)*100)}% of launch volume from M1–M3 to M4–M6 or increase Bw to reduce weekly spikes.` : '';
-      $('recoText').textContent = (recos.length?('Recommendations — '+recos.join('; ')+'.'):'No changes suggested.') + shiftReco;
-    };
-    const applyDefaultPreset=()=>{
-      [...presets.children].forEach(c=>{if(c.dataset.name==='Typical')c.classList.add('active')});
-      applyInputs();
-      render()
-    };
-    $('play').onclick=()=>{
-      const rows=ramp(state);
       let i=0;
       const step=()=>{
-        if(i>11)return;
-        mainChart.data.datasets.forEach(ds=>ds.data=ds.data.map((v,idx)=>idx<=i?v:NaN));
-        mainChart.update();
+        if(i>=rows.length){return}
+        const partial = rows.slice(0,i+1);
+        while(partial.length<12){ partial.push({final:0}); }
+        drawHeat(partial);
         i++;
         requestAnimationFrame(step)
+      };
+      drawHeat(rows);
+      requestAnimationFrame(step)
       };
       render();
       requestAnimationFrame(step)
     };
     $('png').onclick=()=>{
-      const chartImg=mainChart.toBase64Image();
+      const chartImg=heat.toDataURL('image/png');
       const c=document.createElement('canvas');
       c.width=1400; c.height=700;
       const g=c.getContext('2d');
@@ -434,7 +376,7 @@
     };
     $('csv').onclick=()=>{
       const rows=ramp(state);
-      let csv='Month,Active members,Sessions/week,Base coaching need,Need incl. buffer,Cap-based,Final\n';
+      let csv='Week,Active members,Sessions/week,Base coaching need,Need incl. buffer,Cap-based,Final\n';
       rows.forEach(r=>{csv+=`M${r.m},${Math.round(r.active)},${r.sw},${r.raw},${r.buf},${r.cap},${r.final}\n`});
       const blob=new Blob([csv],{type:'text/csv'});
       const url=URL.createObjectURL(blob);
