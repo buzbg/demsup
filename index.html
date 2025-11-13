@@ -55,12 +55,30 @@
 <body>
   <div class="wrap">
     <h1>Coach Supply Simulator</h1>
-    <div class="topcopy">How staggering, booking window, and coach capacity shape supply.</div>
+    <div class="topcopy">
+        Explore staffing needs over time. KPIs summarize the current scenario, the chart shows the monthly ramp, Inputs set the assumptions, Launch Mix controls staggered activation, Sensitivity gives quick what‑ifs, and GEOs & Coach Pools let you size by region and compare against available supply.
+      </div>
     <div class="layout">
       <div class="panel">
-        <div class="kpis">
+        <div class="kpis" style="text-align:center">
           <div class="kcard">
             <div class="lab">Final coaches required</div>
+            <div class="big" id="kFinal">0</div>
+            <div class="lab">Final = max(Session need, Member cap)</div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Primary driver</div>
+            <div class="row" style="justify-content:center"><span class="badge" id="kBadge">–</span></div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Members per coach at final</div>
+            <div class="big" id="kMPC">0</div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Sessions/week (steady)</div>
+            <div class="big" id="kSW">0</div>
+          </div>
+        </div>
             <div class="big" id="kFinal">0</div>
             <div class="lab">Final = max(Session need, Member cap)</div>
           </div>
@@ -82,8 +100,8 @@
           <div class="sub">
             <div class="row">
               <div class="pill">Active members</div>
-              <div class="pill">Coaches raw</div>
-              <div class="pill">Coaches buffered</div>
+              <div class="pill">Base coaching need</div>
+              <div class="pill">Need incl. buffer</div>
               <div class="pill">Final</div>
             </div>
             <div class="row"><button class="btn" id="play">Animate Ramp</button></div>
@@ -130,6 +148,20 @@
           <button class="btn" id="copyJson">Copy settings JSON</button>
         </div>
       </div>
+      <div class="panel">
+        <h2>GEOs & Coach Pools</h2>
+        <div class="help">Adjust member population and available coaches by region; toggle to apply split.</div>
+        <div class="inputs">
+          <div class="igroup"><label>Use GEO split</label><select id="useGeo"><option value="no">No</option><option value="yes">Yes</option></select></div>
+          <div class="igroup"><label>NORAM Members</label><input id="gn" type="number" class="focus" value="2000" min="0" step="1"/></div>
+          <div class="igroup"><label>EMEA Members</label><input id="ge" type="number" class="focus" value="2000" min="0" step="1"/></div>
+          <div class="igroup"><label>APAC Members</label><input id="ga" type="number" class="focus" value="2000" min="0" step="1"/></div>
+          <div class="igroup"><label>NORAM Coaches (avail)</label><input id="cn" type="number" class="focus" value="40" min="0" step="1"/></div>
+          <div class="igroup"><label>EMEA Coaches (avail)</label><input id="ce" type="number" class="focus" value="20" min="0" step="1"/></div>
+          <div class="igroup"><label>APAC Coaches (avail)</label><input id="ca" type="number" class="focus" value="10" min="0" step="1"/></div>
+        </div>
+        <div class="chips" id="geoKpis" style="margin-top:8px"></div>
+      </div>
     </div>
     <div class="panel" style="margin-top:12px">
       <div class="table">
@@ -139,8 +171,8 @@
               <th>Month</th>
               <th>Active members</th>
               <th>Sessions/week</th>
-              <th>Coaches raw</th>
-              <th>Coaches buffered</th>
+              <th>Base coaching need</th>
+              <th>Need incl. buffer</th>
               <th>Cap-based</th>
               <th>Final</th>
             </tr>
@@ -225,7 +257,11 @@
     const kBadge=$('kBadge');
     const kMPC=$('kMPC');
     const kSW=$('kSW');
+    const useGeo=$('useGeo');
+    const gn=$('gn'), ge=$('ge'), ga=$('ga');
+    const cn=$('cn'), ce=$('ce'), ca=$('ca');
     Object.values(inputs).forEach(inp=>inp.oninput=()=>{applyInputs();render()});
+    [useGeo,gn,ge,ga,cn,ce,ca].forEach(el=>el.addEventListener('input',()=>{applyInputs();render()}));render()});
     const applyInputs=()=>{
       state.N=Math.max(1,parseFloat(inputs.N.value)||1);
       state.S=Math.max(1,parseFloat(inputs.S.value)||1);
@@ -276,8 +312,8 @@
       type:'line',
       data:{labels:months,datasets:[
         {label:'Active members',data:[],borderWidth:2,tension:.25,pointRadius:0},
-        {label:'Coaches raw',data:[],borderWidth:2,tension:.25,pointRadius:0,borderDash:[6,4]},
-        {label:'Coaches buffered',data:[],borderWidth:2,tension:.25,pointRadius:0},
+        {label:'Base coaching need',data:[],borderWidth:2,tension:.25,pointRadius:0,borderDash:[6,4]},
+        {label:'Need incl. buffer',data:[],borderWidth:2,tension:.25,pointRadius:0},
         {label:'Final',data:[],borderWidth:3,tension:.25,pointRadius:3}
       ]},
       options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},plugins:{legend:{labels:{color:'#cfe2ff'}},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#9fb3c8'}},y:{ticks:{color:'#9fb3c8'},beginAtZero:true}}}
@@ -321,13 +357,27 @@
       mainChart.data.datasets[3].data=fin;
       mainChart.update();
       kFinal.textContent=ss.final;
-      const driver=ss.buf>=ss.cap?'Driven by Session Volume':'Driven by Member Cap';
-      kBadge.textContent=driver;
+      const driver=ss.buf>=ss.cap?'Session volume':'Member capacity';
+      kBadge.textContent='Primary Driver: '+driver;
       kMPC.textContent=Math.max(1,Math.round(state.N/Math.max(1,ss.final)));
       kSW.textContent=fmt(ss.sw);
       buildMini();
       fillTable(rows);
-      sensUpdate()
+      sensUpdate();
+      const totalMembersGeo=+gn.value+ +ge.value+ +ga.value;
+      const totalCoachesGeo=+cn.value+ +ce.value+ +ca.value;
+      const geoDiv=$('geoKpis');
+      geoDiv.innerHTML='';
+      const chip=(t)=>{const d=document.createElement('div');d.className='chip';d.textContent=t;return d};
+      const useSplit=(useGeo.value==='yes');
+      if(useSplit){
+        state.N=Math.max(1,totalMembersGeo);
+        inputs.N.value=state.N;
+      }
+      const shortfall= totalCoachesGeo - ss.final;
+      geoDiv.appendChild(chip('Total GEO members: '+fmt(totalMembersGeo)));
+      geoDiv.appendChild(chip('Available coaches: '+fmt(totalCoachesGeo)));
+      geoDiv.appendChild(chip((shortfall>=0?'Surplus: ':'Shortfall: ')+fmt(Math.abs(shortfall))));
     };
     const applyDefaultPreset=()=>{
       [...presets.children].forEach(c=>{if(c.dataset.name==='Typical')c.classList.add('active')});
