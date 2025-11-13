@@ -244,9 +244,14 @@
       applyInputs();
       render()
     });
+    function applyDefaultPreset(){
+      [...presets.children].forEach(c=>{ if(c.dataset.name==='Typical'){ c.classList.add('active'); } else { c.classList.remove('active'); }});
+      inputs.Cw.value='15'; inputs.Buf.value='15'; inputs.Bw.value='8'; inputs.Cap.value='100';
+      applyInputs();
+      render();
+    }
     const even=$('even'),hump=$('hump'),smooth=$('smooth'),rebalance=$('rebalance');
-    even.onclick=()=>{state.LaunchMix=Array(12).fill(1/12);syncMixUI();
-    const applyDefaultPreset=()=>{[...presets.children].forEach(c=>{if(c.dataset.name==='Typical')c.classList.add('active')});applyInputs();render()};render()};
+    even.onclick=()=>{state.LaunchMix=Array(12).fill(1/12);syncMixUI();render()};
     hump.onclick=()=>{state.LaunchMix=[.25,.18,.12,.09,.07,.06,.06,.06,.04,.03,.02,.02];normalizeMix();syncMixUI();render()};
     smooth.onclick=()=>{let arr=[];let s=0;for(let i=1;i<=12;i++){arr.push(i);s+=i}state.LaunchMix=arr.map(v=>v/s);syncMixUI();render()};
     rebalance.onclick=()=>{normalizeMix();syncMixUI();render()};
