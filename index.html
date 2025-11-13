@@ -133,7 +133,20 @@
           <button class="btn" id="copyJson">Copy settings JSON</button>
         </div>
       </div>
-       class="table" style="margin-top:8px">
+      <div class="panel">
+        <h2>GEOs & Coach Pools</h2>
+        <div class="help">Adjust member population and available coaches by region; toggle to apply split.</div>
+        <div class="inputs">
+          <div class="igroup"><label>Use GEO split</label><select id="useGeo"><option value="no">No</option><option value="yes">Yes</option></select></div>
+          <div class="igroup"><label>NORAM Members</label><input id="gn" type="number" class="focus" value="2000" min="0" step="1"/></div>
+          <div class="igroup"><label>EMEA Members</label><input id="ge" type="number" class="focus" value="2000" min="0" step="1"/></div>
+          <div class="igroup"><label>APAC Members</label><input id="ga" type="number" class="focus" value="2000" min="0" step="1"/></div>
+          <div class="igroup"><label>NORAM Coaches (avail)</label><input id="cn" type="number" class="focus" value="40" min="0" step="1"/></div>
+          <div class="igroup"><label>EMEA Coaches (avail)</label><input id="ce" type="number" class="focus" value="20" min="0" step="1"/></div>
+          <div class="igroup"><label>APAC Coaches (avail)</label><input id="ca" type="number" class="focus" value="10" min="0" step="1"/></div>
+        </div>
+        <div class="chips" id="geoKpis" style="margin-top:8px"></div>
+        <div class="table" style="margin-top:8px">
           <table id="geoTbl">
             <thead>
               <tr>
@@ -332,7 +345,9 @@
     const render=()=>{
       const ss=steadyState(state);
       const rows=ramp(state);
-      const act=rows.map(r=>r.active)onst buf=rows.map(r=>r.buf);
+      const act=rows.map(r=>r.active);
+      const raw=rows.map(r=>r.raw);
+      const buf=rows.map(r=>r.buf);
       const fin=rows.map(r=>r.final);
       mainChart.data.datasets[0].data=act;
       mainChart.data.datasets[1].data=raw;
@@ -361,6 +376,27 @@
       geoDiv.appendChild(chip('Total GEO members: '+fmt(totalMembersGeo)));
       geoDiv.appendChild(chip('Available coaches: '+fmt(totalCoachesGeo)));
       geoDiv.appendChild(chip((shortfall>=0?'Surplus: ':'Shortfall: ')+fmt(Math.abs(shortfall))));
+      const geoRows=[
+        {k:'NORAM',members:+gn.value,avail:+cn.value},
+        {k:'EMEA',members:+ge.value,avail:+ce.value},
+        {k:'APAC',members:+ga.value,avail:+ca.value}
+      ];
+      const totalM=geoRows.reduce((a,r)=>a+r.members,0)||1;
+      const gtb=$('geoTbl').querySelector('tbody');
+      gtb.innerHTML='';
+      let recos=[];
+      geoRows.forEach(r=>{
+        const share=r.members/totalM;
+        const needed=Math.ceil(ss.final*share);
+        const delta=needed - r.avail;
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${r.k}</td><td>${fmt(r.members)}</td><td>${(share*100).toFixed(1)}%</td><td>${fmt(r.avail)}</td><td>${fmt(needed)}</td><td>${delta>0?('+'+delta):delta}</td>`;
+        gtb.appendChild(tr);
+        if(delta>0){ recos.push(`${r.k}: add ${delta} coach${delta>1?'es':''}`); }
+      });
+      const earlyLoad= state.LaunchMix.slice(0,3).reduce((a,b)=>a+b,0);
+      const shiftReco = earlyLoad>0.5 ? ` Consider shifting ${Math.round((earlyLoad-0.5)*100)}% of launch volume from M1–M3 to M4–M6 or increase Bw to reduce weekly spikes.` : '';
+      $('recoText').textContent = (recos.length?('Recommendations — '+recos.join('; ')+'.'):'No changes suggested.') + shiftReco;
     };
     const applyDefaultPreset=()=>{
       [...presets.children].forEach(c=>{if(c.dataset.name==='Typical')c.classList.add('active')});
