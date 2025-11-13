@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coach Supply Simulator</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <style>
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b0f14;color:#e7ecf3;margin:0}
+    h1{font-size:clamp(22px,2.6vw,32px);margin:18px 0 6px}
+    h2{font-size:clamp(15px,1.6vw,18px);margin:10px 0;color:#9fb3c8}
+    .wrap{max-width:1260px;margin:0 auto;padding:18px}
+    .layout{display:grid;grid-template-columns:1.4fr .9fr;gap:16px}
+    .panel{background:#0f1521;border:1px solid #1c2736;border-radius:16px;padding:14px}
+    .kpis{display:grid;grid-template-columns:2fr 1.1fr 1.1fr 1.1fr;gap:10px}
+    .kcard{background:#0b111b;border:1px solid #1c2736;border-radius:12px;padding:12px}
+    .big{font-size:32px;font-weight:700;line-height:1}
+    .lab{font-size:12px;color:#9fb3c8}
+    .badge{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid #2a3a54;background:#0b111b;color:#cfe2ff;font-weight:600}
+    .row{display:flex;gap:8px;align-items:center}
+    .inputs{display:grid;grid-template-columns:1fr;gap:10px}
+    .igroup{display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:center}
+    .igroup label{font-size:12px;color:#9fb3c8}
+    .igroup input,.igroup select{width:100%;background:#0b111b;border:1px solid #243145;border-radius:10px;padding:8px 10px;color:#e7ecf3}
+    .help{font-size:11px;color:#8aa6c6}
+    .chips{display:flex;flex-wrap:wrap;gap:8px}
+    .chip{background:#1b2332;border:1px solid #2a3a54;border-radius:999px;padding:6px 10px;cursor:pointer}
+    .chip.active{outline:2px solid #5ea0ff}
+    canvas{width:100%;height:100%}
+    .chartWrap{height:420px}
+    .sub{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+    .mini{height:10px;background:#0b111b;border:1px solid #243145;border-radius:6px;display:flex;overflow:hidden}
+    .mini div{height:100%}
+    .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+    .pill{padding:4px 8px;border-radius:999px;border:1px solid #2a3a54;background:#0b111b;color:#9fb3c8;font-size:12px}
+    .table{overflow:auto;border:1px solid #1c2736;border-radius:12px}
+    .table table{width:100%;border-collapse:collapse;font-size:12px}
+    .table th,.table td{padding:8px 10px;border-bottom:1px solid #1c2736;text-align:right}
+    .table th:first-child,.table td:first-child{text-align:left}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+    .btn{background:#1b2332;border:1px solid #2a3a54;color:#e7ecf3;border-radius:10px;padding:8px 10px;cursor:pointer}
+    .btn:active{transform:translateY(1px)}
+    .warn{color:#ffd166}
+    .sum{font-variant-numeric:tabular-nums}
+    .topcopy{color:#9fb3c8;margin-top:4px}
+    .focus:focus{outline:2px solid #5ea0ff;outline-offset:2px}
+    .footer{opacity:.7;margin-top:8px;font-size:12px}
+    .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .hide{display:none}
+    @media(max-width:1024px){.layout{grid-template-columns:1fr}.chartWrap{height:360px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Coach Supply Simulator</h1>
+    <div class="topcopy">How staggering, booking window, and coach capacity shape supply.</div>
+    <div class="layout">
+      <div class="panel">
+        <div class="kpis">
+          <div class="kcard">
+            <div class="lab">Final coaches required</div>
+            <div class="big" id="kFinal">0</div>
+            <div class="lab">Final = max(Session need, Member cap)</div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Constraint</div>
+            <div class="row"><span class="badge" id="kBadge">–</span></div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Members per coach at final</div>
+            <div class="big" id="kMPC">0</div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Sessions/week (steady)</div>
+            <div class="big" id="kSW">0</div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:10px">
+          <div class="chartWrap"><canvas id="mainChart"></canvas></div>
+          <div class="sub">
+            <div class="row">
+              <div class="pill">Active members</div>
+              <div class="pill">Coaches raw</div>
+              <div class="pill">Coaches buffered</div>
+              <div class="pill">Final</div>
+            </div>
+            <div class="row"><button class="btn" id="play">Animate Ramp</button></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="mini" id="mixMini"></div>
+            <div class="pill sum" id="mixSum">Sum: 1.00</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Scenario Presets</h2>
+        <div class="chips" id="presets">
+          <div class="chip" data-name="Conservative" data-cw="10" data-buf="20" data-bw="6" data-cap="80">Conservative</div>
+          <div class="chip" data-name="Typical" data-cw="15" data-buf="15" data-bw="8" data-cap="100">Typical</div>
+          <div class="chip" data-name="Aggressive" data-cw="20" data-buf="10" data-bw="13" data-cap="120">Aggressive</div>
+        </div>
+        <h2 style="margin-top:12px">Inputs</h2>
+        <div class="inputs">
+          <div class="igroup"><label>Total members (N)</label><input id="N" class="focus" type="number" min="1" step="1" value="6000"></div>
+          <div class="igroup"><label>Sessions/member/year (S)</label><input id="S" class="focus" type="number" min="1" max="52" step="1" value="4"></div>
+          <div class="igroup"><label>Weeks per month (Wm)</label><input id="Wm" class="focus" type="number" min="1" max="5" step="0.01" value="4.33"></div>
+          <div class="igroup"><label><span title="Weeks per month when sessions actually happen. Lower = more concentrated bookings → higher weekly demand.">Booking window (Bw)</span></label><input id="Bw" class="focus" type="number" min="2" max="13" step="1" value="3"></div>
+          <div class="igroup"><label><span title="Weekly 1:1 sessions a coach can run.">Coach sessions/week (Cw)</span></label><select id="Cw" class="focus"><option>10</option><option>12</option><option selected>15</option><option>20</option></select></div>
+          <div class="igroup"><label><span title="Extra staffing to absorb PTO, cancellations, and scheduling friction.">Buffer % (Buf)</span></label><input id="Buf" class="focus" type="number" min="0" max="50" step="1" value="15"></div>
+          <div class="igroup"><label><span title="Maximum active members a coach can hold.">Max members/coach (Cap)</span></label><input id="Cap" class="focus" type="number" min="1" step="1" value="100"></div>
+        </div>
+        <h2 style="margin-top:12px">Launch Mix</h2>
+        <div class="help">Must sum to 1.00</div>
+        <div class="grid2" id="mixGrid"></div>
+        <div class="controls">
+          <button class="btn" id="even">Even</button>
+          <button class="btn" id="hump">Hump start</button>
+          <button class="btn" id="smooth">Smooth ramp</button>
+          <button class="btn" id="rebalance">Auto‑rebalance</button>
+          <div class="row" style="justify-content:flex-end"><span id="sumWarn" class="warn hide">Fix to 1.00</span></div>
+        </div>
+        <h2 style="margin-top:12px">Sensitivity</h2>
+        <div class="chips" id="sens"></div>
+        <h2 style="margin-top:12px">Export & Share</h2>
+        <div class="row">
+          <button class="btn" id="png">Export PNG</button>
+          <button class="btn" id="csv">Export CSV</button>
+          <button class="btn" id="copyJson">Copy settings JSON</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <div class="table">
+        <table id="dataTbl">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Active members</th>
+              <th>Sessions/week</th>
+              <th>Coaches raw</th>
+              <th>Coaches buffered</th>
+              <th>Cap-based</th>
+              <th>Final</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="footer">©</div>
+  </div>
+  <script>
+    const $=id=>document.getElementById(id);
+    const fmt=n=>{if(n>=1000000)return(n/1000000).toFixed(2).replace(/\.00$/,'')+'M';if(n>=1000)return(n/1000).toFixed(2).replace(/\.00$/,'')+'k';return(Math.round(n*100)/100).toString()};
+    const ceil=x=>Math.ceil(x-1e-9);
+    const state={N:6000,S:4,Wm:4.33,Bw:3,Cw:15,Buf:15,Cap:100,LaunchMix:Array(12).fill(1/12)};
+    const inputs={N:$('N'),S:$('S'),Wm:$('Wm'),Bw:$('Bw'),Cw:$('Cw'),Buf:$('Buf'),Cap:$('Cap')};
+    const months=['M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12'];
+    const mixGrid=$('mixGrid');
+    for(let i=0;i<12;i++){
+      const w=document.createElement('div');
+      const lab=document.createElement('label');
+      lab.textContent=months[i];
+      lab.style.fontSize='12px';
+      lab.style.color='#9fb3c8';
+      const inp=document.createElement('input');
+      inp.type='number';
+      inp.step='0.01';
+      inp.min='0';
+      inp.max='1';
+      inp.className='focus';
+      inp.value=(1/12).toFixed(2);
+      inp.dataset.idx=i;
+      inp.oninput=()=>{state.LaunchMix[i]=Math.max(0,parseFloat(inp.value)||0);validateMix();render()};
+      w.appendChild(lab);
+      w.appendChild(inp);
+      mixGrid.appendChild(w)
+    }
+    const mixMini=$('mixMini');
+    const mixSum=$('mixSum');
+    const sumWarn=$('sumWarn');
+    const presets=$('presets');
+    presets.addEventListener('click',e=>{
+      const t=e.target.closest('.chip');
+      if(!t)return;
+      inputs.Cw.value=t.dataset.cw;
+      inputs.Buf.value=t.dataset.buf;
+      inputs.Bw.value=t.dataset.bw;
+      inputs.Cap.value=t.dataset.cap;
+      [...presets.children].forEach(c=>c.classList.remove('active'));
+      t.classList.add('active');
+      applyInputs();
+      render()
+    });
+    const sens=$('sens');
+    ['10','12','15','20'].forEach(v=>{
+      const c=document.createElement('div');
+      c.className='chip';
+      c.textContent=v+'/wk';
+      c.dataset.cw=v;
+      sens.appendChild(c)
+    });
+    const sensUpdate=()=>{
+      [...sens.children].forEach(ch=>{
+        const tmp={...state,Cw:+ch.dataset.cw};
+        const ss=steadyState(tmp);
+        ch.textContent=ch.dataset.cw+'/wk → '+ss.final
+      })
+    };
+    sens.addEventListener('click',e=>{
+      const t=e.target.closest('.chip');
+      if(!t)return;
+      inputs.Cw.value=t.dataset.cw;
+      applyInputs();
+      render()
+    });
+    const even=$('even'),hump=$('hump'),smooth=$('smooth'),rebalance=$('rebalance');
+    even.onclick=()=>{state.LaunchMix=Array(12).fill(1/12);syncMixUI();render()};
+    hump.onclick=()=>{state.LaunchMix=[.25,.18,.12,.09,.07,.06,.06,.06,.04,.03,.02,.02];normalizeMix();syncMixUI();render()};
+    smooth.onclick=()=>{let arr=[];let s=0;for(let i=1;i<=12;i++){arr.push(i);s+=i}state.LaunchMix=arr.map(v=>v/s);syncMixUI();render()};
+    rebalance.onclick=()=>{normalizeMix();syncMixUI();render()};
+    const kFinal=$('kFinal');
+    const kBadge=$('kBadge');
+    const kMPC=$('kMPC');
+    const kSW=$('kSW');
+    Object.values(inputs).forEach(inp=>inp.oninput=()=>{applyInputs();render()});
+    const applyInputs=()=>{
+      state.N=Math.max(1,parseFloat(inputs.N.value)||1);
+      state.S=Math.max(1,parseFloat(inputs.S.value)||1);
+      state.Wm=Math.max(1,parseFloat(inputs.Wm.value)||1);
+      state.Bw=Math.max(1,parseFloat(inputs.Bw.value)||1);
+      if(state.Bw>state.Wm){state.Bw=state.Wm;inputs.Bw.value=state.Bw.toFixed(2)}
+      state.Cw=parseFloat(inputs.Cw.value)||15;
+      state.Buf=Math.max(0,parseFloat(inputs.Buf.value)||0);
+      state.Cap=Math.max(1,parseInt(inputs.Cap.value)||1)
+    };
+    const validateMix=()=>{
+      const s=state.LaunchMix.reduce((a,b)=>a+b,0);
+      mixSum.textContent='Sum: '+s.toFixed(2);
+      if(Math.abs(s-1)>1e-6){sumWarn.classList.remove('hide')}else{sumWarn.classList.add('hide')}
+    };
+    const normalizeMix=()=>{
+      let s=state.LaunchMix.reduce((a,b)=>a+b,0);
+      if(s<=0){state.LaunchMix=[1,0,0,0,0,0,0,0,0,0,0,0]}else{state.LaunchMix=state.LaunchMix.map(v=>v/s)}
+    };
+    const syncMixUI=()=>{
+      [...mixGrid.querySelectorAll('input')].forEach((el,i)=>el.value=state.LaunchMix[i].toFixed(2));
+      validateMix()
+    };
+    const steadyState=st=>{
+      const sm=st.N*(st.S/12);
+      const sw=sm/Math.max(1,st.Bw);
+      const raw=sw/Math.max(1,st.Cw);
+      const buf=ceil(raw*(1+st.Buf/100));
+      const cap=ceil(st.N/Math.max(1,st.Cap));
+      const final=Math.max(buf,cap);
+      return{sm,sw,raw,buf,cap,final}
+    };
+    const ramp=st=>{
+      let a=0;const rows=[];
+      for(let m=0;m<12;m++){
+        a+=st.N*st.LaunchMix[m];
+        const sm=a*(st.S/12);
+        const sw=sm/Math.max(1,st.Bw);
+        const raw=sw/Math.max(1,st.Cw);
+        const buf=ceil(raw*(1+st.Buf/100));
+        const cap=ceil(a/Math.max(1,st.Cap));
+        const final=Math.max(buf,cap);
+        rows.push({m:m+1,active:a,sw,raw,buf,cap,final})
+      }
+      return rows
+    };
+    const mainChart=new Chart($('mainChart').getContext('2d'),{
+      type:'line',
+      data:{labels:months,datasets:[
+        {label:'Active members',data:[],borderWidth:2,tension:.25,pointRadius:0},
+        {label:'Coaches raw',data:[],borderWidth:2,tension:.25,pointRadius:0,borderDash:[6,4]},
+        {label:'Coaches buffered',data:[],borderWidth:2,tension:.25,pointRadius:0},
+        {label:'Final',data:[],borderWidth:3,tension:.25,pointRadius:3}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},plugins:{legend:{labels:{color:'#cfe2ff'}},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#9fb3c8'}},y:{ticks:{color:'#9fb3c8'},beginAtZero:true}}}
+    });
+    const palette=()=>{
+      const a='#6ea8fe',b='#94d2bd',c='#c084fc',d='#e9d8a6';
+      mainChart.data.datasets[0].borderColor=a;
+      mainChart.data.datasets[1].borderColor=b;
+      mainChart.data.datasets[2].borderColor=c;
+      mainChart.data.datasets[3].borderColor=d
+    };
+    palette();
+    const buildMini=()=>{
+      mixMini.innerHTML='';
+      state.LaunchMix.forEach(v=>{
+        const seg=document.createElement('div');
+        seg.style.width=(v*100)+'%';
+        seg.style.background='#3b82f6';
+        mixMini.appendChild(seg)
+      })
+    };
+    const fillTable=rows=>{
+      const tb=$('dataTbl').querySelector('tbody');
+      tb.innerHTML='';
+      rows.forEach(r=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>M${r.m}</td><td>${fmt(r.active)}</td><td>${fmt(r.sw)}</td><td>${fmt(r.raw)}</td><td>${fmt(r.buf)}</td><td>${fmt(r.cap)}</td><td>${fmt(r.final)}</td>`;
+        tb.appendChild(tr)
+      })
+    };
+    const render=()=>{
+      const ss=steadyState(state);
+      const rows=ramp(state);
+      const act=rows.map(r=>r.active);
+      const raw=rows.map(r=>r.raw);
+      const buf=rows.map(r=>r.buf);
+      const fin=rows.map(r=>r.final);
+      mainChart.data.datasets[0].data=act;
+      mainChart.data.datasets[1].data=raw;
+      mainChart.data.datasets[2].data=buf;
+      mainChart.data.datasets[3].data=fin;
+      mainChart.update();
+      kFinal.textContent=ss.final;
+      const driver=ss.buf>=ss.cap?'Driven by Session Volume':'Driven by Member Cap';
+      kBadge.textContent=driver;
+      kMPC.textContent=Math.max(1,Math.round(state.N/Math.max(1,ss.final)));
+      kSW.textContent=fmt(ss.sw);
+      buildMini();
+      fillTable(rows);
+      sensUpdate()
+    };
+    const applyDefaultPreset=()=>{
+      [...presets.children].forEach(c=>{if(c.dataset.name==='Typical')c.classList.add('active')});
+      applyInputs();
+      render()
+    };
+    $('play').onclick=()=>{
+      const rows=ramp(state);
+      let i=0;
+      const step=()=>{
+        if(i>11)return;
+        mainChart.data.datasets.forEach(ds=>ds.data=ds.data.map((v,idx)=>idx<=i?v:NaN));
+        mainChart.update();
+        i++;
+        requestAnimationFrame(step)
+      };
+      render();
+      requestAnimationFrame(step)
+    };
+    $('png').onclick=()=>{
+      const chartImg=mainChart.toBase64Image();
+      const c=document.createElement('canvas');
+      c.width=1400; c.height=700;
+      const g=c.getContext('2d');
+      g.fillStyle='#0b0f14'; g.fillRect(0,0,c.width,c.height);
+      g.fillStyle='#e7ecf3'; g.font='20px Inter'; g.fillText('Coach Supply Simulator',24,36);
+      g.font='14px Inter';
+      g.fillText('Final: '+$('kFinal').textContent,24,70);
+      g.fillText($('kBadge').textContent,24,94);
+      g.fillText('Members/Coach: '+$('kMPC').textContent,24,118);
+      g.fillText('Sessions/Week (steady): '+$('kSW').textContent,24,142);
+      const img=new Image();
+      img.onload=()=>{g.drawImage(img,24,170,1352,480);const link=document.createElement('a');link.download='coach-supply.png';link.href=c.toDataURL('image/png');link.click()};
+      img.src=chartImg
+    };
+    $('csv').onclick=()=>{
+      const rows=ramp(state);
+      let csv='Month,Active members,Sessions/week,Coaches raw,Coaches buffered,Cap-based,Final\n';
+      rows.forEach(r=>{csv+=`M${r.m},${Math.round(r.active)},${r.sw},${r.raw},${r.buf},${r.cap},${r.final}\n`});
+      const blob=new Blob([csv],{type:'text/csv'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='coach-supply.csv'; a.click();
+      URL.revokeObjectURL(url)
+    };
+    $('copyJson').onclick=()=>{
+      const cfg=JSON.stringify(state);
+      navigator.clipboard.writeText(cfg)
+    };
+    syncMixUI();
+    applyDefaultPreset();
+  </script>
+</body>
+</html>
