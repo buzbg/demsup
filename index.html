@@ -63,6 +63,22 @@
         <div class="kpis" style="text-align:center">
           <div class="kcard">
             <div class="lab">Final coaches required</div>
+            <div class="big" id="kFinal">0</div>
+            <div class="lab">Final = max(Session need, Member cap)</div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Primary driver</div>
+            <div class="row" style="justify-content:center"><span class="badge" id="kBadge">–</span></div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Members per coach at final</div>
+            <div class="big" id="kMPC">0</div>
+          </div>
+          <div class="kcard">
+            <div class="lab">Sessions/week (steady)</div>
+            <div class="big" id="kSW">0</div>
+          </div>
+        </div>
         <div class="panel" style="margin-top:10px">
           <div class="chartWrap"><canvas id="mainChart"></canvas></div>
           <div class="sub">
@@ -385,8 +401,7 @@
     };
     $('csv').onclick=()=>{
       const rows=ramp(state);
-      let csv='Month,Active members,Sessions/week,Base coaching need,Need incl. buffer,Cap-based,Final
-';
+      let csv='Month,Active members,Sessions/week,Base coaching need,Need incl. buffer,Cap-based,Final\\n';
       rows.forEach(r=>{csv+=`M${r.m},${Math.round(r.active)},${r.sw},${r.raw},${r.buf},${r.cap},${r.final}\n`});
       const blob=new Blob([csv],{type:'text/csv'});
       const url=URL.createObjectURL(blob);
