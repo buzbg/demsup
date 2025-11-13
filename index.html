@@ -63,38 +63,6 @@
         <div class="kpis" style="text-align:center">
           <div class="kcard">
             <div class="lab">Final coaches required</div>
-            <div class="big" id="kFinal">0</div>
-            <div class="lab">Final = max(Session need, Member cap)</div>
-          </div>
-          <div class="kcard">
-            <div class="lab">Primary driver</div>
-            <div class="row" style="justify-content:center"><span class="badge" id="kBadge">–</span></div>
-          </div>
-          <div class="kcard">
-            <div class="lab">Members per coach at final</div>
-            <div class="big" id="kMPC">0</div>
-          </div>
-          <div class="kcard">
-            <div class="lab">Sessions/week (steady)</div>
-            <div class="big" id="kSW">0</div>
-          </div>
-        </div>
-            <div class="big" id="kFinal">0</div>
-            <div class="lab">Final = max(Session need, Member cap)</div>
-          </div>
-          <div class="kcard">
-            <div class="lab">Constraint</div>
-            <div class="row"><span class="badge" id="kBadge">–</span></div>
-          </div>
-          <div class="kcard">
-            <div class="lab">Members per coach at final</div>
-            <div class="big" id="kMPC">0</div>
-          </div>
-          <div class="kcard">
-            <div class="lab">Sessions/week (steady)</div>
-            <div class="big" id="kSW">0</div>
-          </div>
-        </div>
         <div class="panel" style="margin-top:10px">
           <div class="chartWrap"><canvas id="mainChart"></canvas></div>
           <div class="sub">
@@ -261,7 +229,7 @@
     const gn=$('gn'), ge=$('ge'), ga=$('ga');
     const cn=$('cn'), ce=$('ce'), ca=$('ca');
     Object.values(inputs).forEach(inp=>inp.oninput=()=>{applyInputs();render()});
-    [useGeo,gn,ge,ga,cn,ce,ca].forEach(el=>el.addEventListener('input',()=>{applyInputs();render()}));render()});
+    [useGeo,gn,ge,ga,cn,ce,ca].forEach(el=>el.addEventListener('input',()=>{applyInputs();render()}));
     const applyInputs=()=>{
       state.N=Math.max(1,parseFloat(inputs.N.value)||1);
       state.S=Math.max(1,parseFloat(inputs.S.value)||1);
@@ -314,16 +282,18 @@
         {label:'Active members',data:[],borderWidth:2,tension:.25,pointRadius:0},
         {label:'Base coaching need',data:[],borderWidth:2,tension:.25,pointRadius:0,borderDash:[6,4]},
         {label:'Need incl. buffer',data:[],borderWidth:2,tension:.25,pointRadius:0},
-        {label:'Final',data:[],borderWidth:3,tension:.25,pointRadius:3}
+        {label:'Final',type:'bar',data:[],backgroundColor:'#e9d8a6',borderWidth:0}
       ]},
       options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},plugins:{legend:{labels:{color:'#cfe2ff'}},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#9fb3c8'}},y:{ticks:{color:'#9fb3c8'},beginAtZero:true}}}
     });
     const palette=()=>{
-      const a='#6ea8fe',b='#94d2bd',c='#c084fc',d='#e9d8a6';
-      mainChart.data.datasets[0].borderColor=a;
-      mainChart.data.datasets[1].borderColor=b;
-      mainChart.data.datasets[2].borderColor=c;
-      mainChart.data.datasets[3].borderColor=d
+      const a='rgba(110,168,254,0.35)',b='rgba(148,210,189,0.35)',c='rgba(192,132,252,0.35)';
+      mainChart.data.datasets[0].borderColor='#6ea8fe';
+      mainChart.data.datasets[0].backgroundColor=a; mainChart.data.datasets[0].fill=true;
+      mainChart.data.datasets[1].borderColor='#94d2bd';
+      mainChart.data.datasets[1].backgroundColor=b; mainChart.data.datasets[1].fill=true;
+      mainChart.data.datasets[2].borderColor='#c084fc';
+      mainChart.data.datasets[2].backgroundColor=c; mainChart.data.datasets[2].fill=true;
     };
     palette();
     const buildMini=()=>{
@@ -415,7 +385,8 @@
     };
     $('csv').onclick=()=>{
       const rows=ramp(state);
-      let csv='Month,Active members,Sessions/week,Coaches raw,Coaches buffered,Cap-based,Final\n';
+      let csv='Month,Active members,Sessions/week,Base coaching need,Need incl. buffer,Cap-based,Final
+';
       rows.forEach(r=>{csv+=`M${r.m},${Math.round(r.active)},${r.sw},${r.raw},${r.buf},${r.cap},${r.final}\n`});
       const blob=new Blob([csv],{type:'text/csv'});
       const url=URL.createObjectURL(blob);
